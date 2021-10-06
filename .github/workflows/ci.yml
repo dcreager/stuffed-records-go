@@ -1,0 +1,29 @@
+name: Continuous integration
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 0 1,15 * *"
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        go: ['1.17']
+
+    steps:
+      - name: Install Go environment
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go }}
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Build library
+        run: |
+          go build ./stuffed
+      - name: Run test suite
+        run: |
+          go test ./stuffed
