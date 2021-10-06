@@ -26,4 +26,4 @@ jobs:
           go build ./stuffed
       - name: Run test suite
         run: |
-          go test ./stuffed
+          go test ./stuffed -rapid.checks=10000
