@@ -54,3 +54,10 @@ func TestRoundTrip(t *testing.T) {
 		assert.Equal(t, input, decoded.String())
 	})
 }
+
+func TestRoundTripRandomLists(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		inputList := rapid.SliceOf(inputString).Draw(t, "inputList").([]string)
+		checkListRoundTrip(t, inputList)
+	})
+}

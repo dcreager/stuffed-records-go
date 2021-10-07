@@ -2,6 +2,7 @@ package stuffed_test
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -84,4 +85,51 @@ func TestDecodeRecords(t *testing.T) {
 		err := stuffed.Decode([]byte(encoded), &buf)
 		assert.Equal(t, stuffed.InvalidRunLength, err)
 	}
+}
+
+func ExampleScanner() {
+	encoded := []byte("\x03abc\xfe\xfd\x00\xfe\xfd\xfe\xfd\x041234\xfe\xfd")
+	var s stuffed.Scanner
+	var decoded bytes.Buffer
+	s.Reset(encoded)
+	for s.Next() {
+		decoded.Reset()
+		err := s.Decode(&decoded)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println(decoded.String())
+	}
+	// Output:
+	// abc
+	//
+	// 1234
+}
+
+func checkListRoundTrip(t require.TestingT, inputList []string) {
+	var buf bytes.Buffer
+	for _, input := range inputList {
+		stuffed.EncodeDelimiter(&buf)
+		stuffed.Encode([]byte(input), &buf)
+	}
+	stuffed.EncodeDelimiter(&buf)
+
+	decodedList := []string{}
+	var s stuffed.Scanner
+	s.Reset(buf.Bytes())
+	for s.Next() {
+		var decoded bytes.Buffer
+		err := s.Decode(&decoded)
+		require.NoError(t, err)
+		decodedList = append(decodedList, decoded.String())
+	}
+	assert.Equal(t, inputList, decodedList)
+}
+
+func TestRoundTripList(t *testing.T) {
+	var inputList []string
+	for _, tc := range shortTestCases {
+		inputList = append(inputList, tc.decoded)
+	}
+	checkListRoundTrip(t, inputList)
 }

@@ -145,3 +145,56 @@ func Decode(encoded []byte, record *bytes.Buffer) error {
 func FindDelimiter(record []byte) int {
 	return bytes.Index(record, []byte{delimiter0, delimiter1})
 }
+
+// Scanner iterates through a buffer containing zero or more delimited stuffed
+// records.
+type Scanner struct {
+	record []byte
+	list   []byte
+	buf    bytes.Buffer
+}
+
+// Reset updates a Scanner to read from a new buffer of delimited stuffed
+// records.
+func (s *Scanner) Reset(encodedList []byte) {
+	s.record = nil
+	s.list = encodedList
+	s.buf.Reset()
+}
+
+// Next returs whether there is a next stuffed record in the underlying buffer.
+// If this returns true, you can use Encoded and Decode to access that record.
+func (s *Scanner) Next() bool {
+	// Skip over any leading delimiters.
+	for bytes.HasPrefix(s.list, []byte{delimiter0, delimiter1}) {
+		s.list = s.list[delimiterLength:]
+	}
+
+	// If the buffer is now empty, we've reached the end of the list.
+	if len(s.list) == 0 {
+		return false
+	}
+
+	// Otherwise, whatever exists at the start of the buffer, up through the
+	// next delimiter, is the next encoded record.
+	index := FindDelimiter(s.list)
+	if index == -1 {
+		s.record = s.list
+		s.list = nil
+	} else {
+		s.record = s.list[:index]
+		s.list = s.list[index:]
+	}
+	return true
+}
+
+// Encoded returns the portion of the underlying buffer that contains the
+// encoded content of the current stuffed record.
+func (s *Scanner) Encoded() []byte {
+	return s.record
+}
+
+// Decode reads the current stuffed record and decodes it into an output Buffer.
+func (s *Scanner) Decode(decoded *bytes.Buffer) error {
+	return Decode(s.record, decoded)
+}
