@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"testing"
 
@@ -11,6 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+var delimiter = []byte{0xfe, 0xfd}
 
 const string32 = "abcdefghijklmnopqrstuvwxyz012345"
 const string64 = string32 + string32
@@ -206,5 +209,40 @@ func checkEncodedStartsWith(t require.TestingT, inputList []string, prefix strin
 func TestEncodedStartsWith(t *testing.T) {
 	for _, tc := range prefixTestCases {
 		checkEncodedStartsWith(t, shortTestCaseInputs(), tc.prefix, tc.expected)
+	}
+}
+
+func checkFindRecordsWithPrefix(t require.TestingT, inputList []string, prefix string, expected []string) {
+	sort.Strings(inputList)
+	sort.Strings(expected)
+
+	var encoded bytes.Buffer
+	for _, input := range inputList {
+		stuffed.EncodeDelimiter(&encoded)
+		stuffed.Encode([]byte(input), &encoded)
+	}
+	stuffed.EncodeDelimiter(&encoded)
+
+	matching, err := stuffed.FindRecordsWithPrefix(encoded.Bytes(), []byte(prefix))
+	require.NoError(t, err)
+	assert.False(t, bytes.HasPrefix(matching, delimiter))
+	assert.False(t, bytes.HasSuffix(matching, delimiter))
+
+	var actual []string
+	var s stuffed.Scanner
+	s.Reset(matching)
+	for s.Next() {
+		var decoded bytes.Buffer
+		err := s.Decode(&decoded)
+		require.NoError(t, err)
+		actual = append(actual, decoded.String())
+	}
+
+	assert.Equal(t, expected, actual)
+}
+
+func TestFindRecordsWithPrefix(t *testing.T) {
+	for _, tc := range prefixTestCases {
+		checkFindRecordsWithPrefix(t, shortTestCaseInputs(), tc.prefix, tc.expected)
 	}
 }

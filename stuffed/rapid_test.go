@@ -63,29 +63,40 @@ func TestRoundTripRandomLists(t *testing.T) {
 	})
 }
 
+func prefixLists(t *rapid.T) ([]string, string, []string) {
+	prefix := inputString.Draw(t, "prefix").(string)
+	inputList := rapid.SliceOf(inputString).Draw(t, "inputList").([]string)
+	shouldBePrefixed := reflect.ValueOf(rapid.ArrayOf(len(inputList), rapid.Bool()).Draw(t, "shouldBePrefixed"))
+
+	// Ensure that every "prefixed" input actually starts with the prefix.
+	for i := range inputList {
+		if shouldBePrefixed.Index(i).Bool() {
+			inputList[i] = prefix + inputList[i]
+		}
+	}
+
+	// Create our expected result list, by determining which inputs are
+	// prefixed.  (Some of the "other" inputs might coincidentally start
+	// with the chosen prefix.)
+	var expected []string
+	for i := range inputList {
+		if strings.HasPrefix(inputList[i], prefix) {
+			expected = append(expected, inputList[i])
+		}
+	}
+
+	return inputList, prefix, expected
+}
+
 func TestEncodedStartsWithRandomLists(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
-		prefix := inputString.Draw(t, "prefix").(string)
-		inputList := rapid.SliceOf(inputString).Draw(t, "inputList").([]string)
-		shouldBePrefixed := reflect.ValueOf(rapid.ArrayOf(len(inputList), rapid.Bool()).Draw(t, "shouldBePrefixed"))
-
-		// Ensure that every "prefixed" input actually starts with the prefix.
-		for i := range inputList {
-			if shouldBePrefixed.Index(i).Bool() {
-				inputList[i] = prefix + inputList[i]
-			}
-		}
-
-		// Create our expected result list, by determining which inputs are
-		// prefixed.  (Some of the "other" inputs might coincidentally start
-		// with the chosen prefix.)
-		var expected []string
-		for i := range inputList {
-			if strings.HasPrefix(inputList[i], prefix) {
-				expected = append(expected, inputList[i])
-			}
-		}
-
+		inputList, prefix, expected := prefixLists(t)
 		checkEncodedStartsWith(t, inputList, prefix, expected)
+	})
+}
+func TestFindRecordsWithPrefixRandomLists(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		inputList, prefix, expected := prefixLists(t)
+		checkFindRecordsWithPrefix(t, inputList, prefix, expected)
 	})
 }

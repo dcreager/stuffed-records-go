@@ -146,6 +146,12 @@ func FindDelimiter(record []byte) int {
 	return bytes.Index(record, []byte{delimiter0, delimiter1})
 }
 
+// FindLastDelimiter returns the index of the lsat occurrence of the stuffed
+// records delimiter in buf, or -1 if it doesn't occur.
+func FindLastDelimiter(record []byte) int {
+	return bytes.LastIndex(record, []byte{delimiter0, delimiter1})
+}
+
 // Scanner iterates through a buffer containing zero or more delimited stuffed
 // records.
 type Scanner struct {
@@ -303,4 +309,120 @@ func CompareEncodedPrefix(encoded, prefix []byte) (int, error) {
 func EncodedStartsWith(encoded, prefix []byte) (bool, error) {
 	cmp, err := CompareEncodedPrefix(encoded, prefix)
 	return cmp == 0, err
+}
+
+// FindRecordsWithPrefix takes a buffer containing a list of stuffed
+// records that are sorted by their decoded content, and returns the subset of
+// the buffer containing records whose decoded content starts with a particular
+// prefix.  We do this without decoding any of the records.
+func FindRecordsWithPrefix(encodedList, prefix []byte) ([]byte, error) {
+	// min always points at the beginning of an encoded record.  max always
+	// points at the end of one.
+	min := 0
+	max := len(encodedList)
+	for bytes.HasPrefix(encodedList[min:max], []byte{delimiter0, delimiter1}) {
+		min += delimiterLength
+	}
+	for bytes.HasSuffix(encodedList[min:max], []byte{delimiter0, delimiter1}) {
+		max -= delimiterLength
+	}
+
+	end := max
+	earliestMatchStart := max
+	earliestMatchEnd := min
+
+	// Find the first record that starts with the requested prefix.
+	for max > min {
+		// Jump to the middle of the remainder of the buffer, then find the
+		// start of the enclosing record.
+		mid := (max + min) / 2
+		index := FindLastDelimiter(encodedList[min:mid])
+		recordStart := min
+		if index != -1 {
+			recordStart += index + delimiterLength
+		}
+
+		// Find the end of the record.
+		index = FindDelimiter(encodedList[recordStart:max])
+		recordEnd := max
+		if index != -1 {
+			recordEnd = recordStart + index
+		}
+
+		// Compare this record to the requested prefix.  If it matches, remember
+		// its location, but continue to look for any earlier matching records.
+		record := encodedList[recordStart:recordEnd]
+		cmp, err := CompareEncodedPrefix(record, prefix)
+		if err != nil {
+			return nil, err
+		}
+
+		switch cmp {
+		case -1:
+			min = recordEnd
+			for bytes.HasPrefix(encodedList[min:max], []byte{delimiter0, delimiter1}) {
+				min += delimiterLength
+			}
+		case 1:
+			max = recordStart
+			for bytes.HasSuffix(encodedList[min:max], []byte{delimiter0, delimiter1}) {
+				max -= delimiterLength
+			}
+		default:
+			earliestMatchStart = recordStart
+			earliestMatchEnd = recordEnd
+			max = recordStart
+			for bytes.HasSuffix(encodedList[min:max], []byte{delimiter0, delimiter1}) {
+				max -= delimiterLength
+			}
+		}
+	}
+
+	// If there were no matching records, go ahead and return.
+	if earliestMatchStart >= earliestMatchEnd {
+		return nil, nil
+	}
+
+	// Once the earliest matching record is found, iterate forward until we find
+	// the first non-matching record.
+	previousRecordEnd := earliestMatchEnd
+
+	// For the first matching record, avoid repeating the prefix check.
+	nextRecordStart := previousRecordEnd
+	for bytes.HasPrefix(encodedList[nextRecordStart:], []byte{delimiter0, delimiter1}) {
+		nextRecordStart += delimiterLength
+	}
+
+	// Check the next record to see if it matches the prefix.
+	for nextRecordStart < end {
+		// Find the end of the record.
+		nextRecordEnd := FindDelimiter(encodedList[nextRecordStart:])
+		if nextRecordEnd == -1 {
+			nextRecordEnd = end
+		} else {
+			nextRecordEnd += nextRecordStart
+		}
+
+		matches, err := EncodedStartsWith(encodedList[nextRecordStart:nextRecordEnd], prefix)
+		if err != nil {
+			return nil, err
+		}
+
+		if !matches {
+			// This is the first record that DOESN'T match.  Our result is
+			// everything up through the previous record.
+			return encodedList[earliestMatchStart:previousRecordEnd], nil
+		}
+
+		// This record matches.  Skip past it to find the next record.
+		previousRecordEnd = nextRecordEnd
+		nextRecordStart = nextRecordEnd
+		for bytes.HasPrefix(encodedList[nextRecordStart:], []byte{delimiter0, delimiter1}) {
+			nextRecordStart += delimiterLength
+		}
+	}
+
+	// We made it to the end of the input without finding a record that DOESN'T
+	// match.
+	return encodedList[earliestMatchStart:previousRecordEnd], nil
 }
