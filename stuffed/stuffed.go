@@ -198,3 +198,109 @@ func (s *Scanner) Encoded() []byte {
 func (s *Scanner) Decode(decoded *bytes.Buffer) error {
 	return Decode(s.record, decoded)
 }
+
+func checkPrefix(chunk, prefix []byte) (int, int) {
+	length := len(chunk)
+	if length > len(prefix) {
+		length = len(prefix)
+	}
+	return bytes.Compare(chunk[:length], prefix[:length]), length
+}
+
+// CompareEncodedPrefix checks whether the decoded content of a stuffed record
+// begins with a prefix, returning 0 if it does.  If it does not, returns -1 or
+// 1 depending on whether the decoded content's prefix is less than or greater
+// than the desired prefix.  (You provide the _encoded_ stuffed record, and we
+// perform the check without decoding the content into a buffer.)
+func CompareEncodedPrefix(encoded, prefix []byte) (int, error) {
+	// Every byte array starts with the empty byte array.
+	if len(prefix) == 0 {
+		return 0, nil
+	}
+
+	// For the first run, the length is one byte.
+	if len(encoded) < 1 {
+		return 0, io.EOF
+	}
+	runLength := int(encoded[0])
+	encoded = encoded[1:]
+	if runLength > maxInitialRun {
+		return 0, InvalidRunLength
+	}
+
+	if len(encoded) < runLength {
+		return 0, io.EOF
+	}
+	chunk := encoded[:runLength]
+	encoded = encoded[runLength:]
+	cmp, consumed := checkPrefix(chunk, prefix)
+	if cmp != 0 {
+		return cmp, nil
+	}
+	prefix = prefix[consumed:]
+
+	if runLength < maxInitialRun {
+		if len(prefix) == 0 {
+			return 0, nil
+		}
+		if len(encoded) == 0 {
+			return -1, nil
+		}
+
+		chunk := []byte{0xfe, 0xfd}
+		cmp, consumed := checkPrefix(chunk, prefix)
+		if cmp != 0 {
+			return cmp, nil
+		}
+		prefix = prefix[consumed:]
+	}
+
+	for {
+		if len(prefix) == 0 {
+			return 0, nil
+		}
+		if len(encoded) < delimiterLength {
+			return 0, io.EOF
+		}
+		runLength := int(encoded[0]) + radix*int(encoded[1])
+		encoded = encoded[delimiterLength:]
+		if runLength > maxRemainingRun {
+			return 0, InvalidRunLength
+		}
+
+		if len(encoded) < runLength {
+			return 0, io.EOF
+		}
+		chunk := encoded[:runLength]
+		encoded = encoded[runLength:]
+		cmp, consumed := checkPrefix(chunk, prefix)
+		if cmp != 0 {
+			return cmp, nil
+		}
+		prefix = prefix[consumed:]
+
+		if runLength < maxRemainingRun {
+			if len(prefix) == 0 {
+				return 0, nil
+			}
+			if len(encoded) == 0 {
+				return -1, nil
+			}
+
+			chunk := []byte{0xfe, 0xfd}
+			cmp, consumed := checkPrefix(chunk, prefix)
+			if cmp != 0 {
+				return cmp, nil
+			}
+			prefix = prefix[consumed:]
+		}
+	}
+}
+
+// EncodedStartsWith checks whether the decoded content of a stuffed record
+// begins with a prefix.  (You provide the _encoded_ stuffed record, and we
+// perform the check without decoding the content into a buffer.)
+func EncodedStartsWith(encoded, prefix []byte) (bool, error) {
+	cmp, err := CompareEncodedPrefix(encoded, prefix)
+	return cmp == 0, err
+}

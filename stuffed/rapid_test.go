@@ -2,6 +2,7 @@ package stuffed_test
 
 import (
 	"bytes"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -59,5 +60,32 @@ func TestRoundTripRandomLists(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		inputList := rapid.SliceOf(inputString).Draw(t, "inputList").([]string)
 		checkListRoundTrip(t, inputList)
+	})
+}
+
+func TestEncodedStartsWithRandomLists(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		prefix := inputString.Draw(t, "prefix").(string)
+		inputList := rapid.SliceOf(inputString).Draw(t, "inputList").([]string)
+		shouldBePrefixed := reflect.ValueOf(rapid.ArrayOf(len(inputList), rapid.Bool()).Draw(t, "shouldBePrefixed"))
+
+		// Ensure that every "prefixed" input actually starts with the prefix.
+		for i := range inputList {
+			if shouldBePrefixed.Index(i).Bool() {
+				inputList[i] = prefix + inputList[i]
+			}
+		}
+
+		// Create our expected result list, by determining which inputs are
+		// prefixed.  (Some of the "other" inputs might coincidentally start
+		// with the chosen prefix.)
+		var expected []string
+		for i := range inputList {
+			if strings.HasPrefix(inputList[i], prefix) {
+				expected = append(expected, inputList[i])
+			}
+		}
+
+		checkEncodedStartsWith(t, inputList, prefix, expected)
 	})
 }

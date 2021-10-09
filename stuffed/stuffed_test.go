@@ -41,6 +41,14 @@ var shortTestCases = []shortTestCase{
 	},
 }
 
+func shortTestCaseInputs() []string {
+	var result []string
+	for _, tc := range shortTestCases {
+		result = append(result, tc.decoded)
+	}
+	return result
+}
+
 func TestEncodeRecords(t *testing.T) {
 	for _, tc := range shortTestCases {
 		var buf bytes.Buffer
@@ -106,6 +114,21 @@ func ExampleScanner() {
 	// 1234
 }
 
+func parseStrings(encoded []byte) ([]string, error) {
+	decodedList := []string{}
+	var s stuffed.Scanner
+	s.Reset(encoded)
+	for s.Next() {
+		var decoded bytes.Buffer
+		err := s.Decode(&decoded)
+		if err != nil {
+			return nil, err
+		}
+		decodedList = append(decodedList, decoded.String())
+	}
+	return decodedList, nil
+}
+
 func checkListRoundTrip(t require.TestingT, inputList []string) {
 	var buf bytes.Buffer
 	for _, input := range inputList {
@@ -113,23 +136,75 @@ func checkListRoundTrip(t require.TestingT, inputList []string) {
 		stuffed.Encode([]byte(input), &buf)
 	}
 	stuffed.EncodeDelimiter(&buf)
-
-	decodedList := []string{}
-	var s stuffed.Scanner
-	s.Reset(buf.Bytes())
-	for s.Next() {
-		var decoded bytes.Buffer
-		err := s.Decode(&decoded)
-		require.NoError(t, err)
-		decodedList = append(decodedList, decoded.String())
-	}
+	decodedList, err := parseStrings(buf.Bytes())
+	require.NoError(t, err)
 	assert.Equal(t, inputList, decodedList)
 }
 
 func TestRoundTripList(t *testing.T) {
-	var inputList []string
-	for _, tc := range shortTestCases {
-		inputList = append(inputList, tc.decoded)
+	checkListRoundTrip(t, shortTestCaseInputs())
+}
+
+type prefixTestCase struct {
+	prefix   string
+	expected []string
+}
+
+var prefixTestCases = []prefixTestCase{
+	{"", shortTestCaseInputs()},
+	{
+		"abc",
+		[]string{
+			"abc",
+			"abc\xfe\xfd",
+			"abc\xfe\xfdabc",
+			string128,
+			string256,
+		},
+	},
+	{
+		"abc\xfe",
+		[]string{
+			"abc\xfe\xfd",
+			"abc\xfe\xfdabc",
+		},
+	},
+	{
+		"abc\xfe\xfd",
+		[]string{
+			"abc\xfe\xfd",
+			"abc\xfe\xfdabc",
+		},
+	},
+}
+
+func checkEncodedStartsWith(t require.TestingT, inputList []string, prefix string, expected []string) {
+	var encoded bytes.Buffer
+	for _, input := range inputList {
+		stuffed.EncodeDelimiter(&encoded)
+		stuffed.Encode([]byte(input), &encoded)
 	}
-	checkListRoundTrip(t, inputList)
+	stuffed.EncodeDelimiter(&encoded)
+
+	var actual []string
+	var s stuffed.Scanner
+	s.Reset(encoded.Bytes())
+	for s.Next() {
+		matches, err := stuffed.EncodedStartsWith(s.Encoded(), []byte(prefix))
+		require.NoError(t, err)
+		if matches {
+			var decoded bytes.Buffer
+			err := s.Decode(&decoded)
+			require.NoError(t, err)
+			actual = append(actual, decoded.String())
+		}
+	}
+
+	assert.Equal(t, expected, actual)
+}
+
+func TestEncodedStartsWith(t *testing.T) {
+	for _, tc := range prefixTestCases {
+		checkEncodedStartsWith(t, shortTestCaseInputs(), tc.prefix, tc.expected)
+	}
 }
