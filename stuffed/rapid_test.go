@@ -94,9 +94,24 @@ func TestEncodedStartsWithRandomLists(t *testing.T) {
 		checkEncodedStartsWith(t, inputList, prefix, expected)
 	})
 }
+
 func TestFindRecordsWithPrefixRandomLists(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		inputList, prefix, expected := prefixLists(t)
 		checkFindRecordsWithPrefix(t, inputList, prefix, expected)
+	})
+}
+
+func TestRecordBuilderWithRandomLists(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		inputList := rapid.SliceOf(inputString).Draw(t, "inputList").([]string)
+		checkRecordBuilder(t, inputList)
+	})
+}
+
+func TestSortedRecordBuilderWithRandomLists(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		inputList := rapid.SliceOf(inputString).Draw(t, "inputList").([]string)
+		checkSortedRecordBuilder(t, inputList)
 	})
 }
