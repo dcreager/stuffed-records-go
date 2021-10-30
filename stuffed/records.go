@@ -2,6 +2,7 @@ package stuffed
 
 import (
 	"bytes"
+	"sort"
 )
 
 // RecordBuilder makes it easier to build up the content of individual records,
@@ -38,4 +39,31 @@ func (rb *RecordBuilder) Encode(dest *bytes.Buffer) {
 		Encode(record, dest)
 		EncodeDelimiter(dest)
 	}
+}
+
+// Sort sorts all of the records before encoding them, which allows you to use
+// FindRecordsWithPrefix on the encoded result.
+func (rb *RecordBuilder) Sort() {
+	sort.Sort(&recordSorter{rb.Bytes(), rb.recordIndices})
+}
+
+type recordSorter struct {
+	records       []byte
+	recordIndices []index
+}
+
+func (s *recordSorter) Len() int {
+	return len(s.recordIndices)
+}
+
+func (s *recordSorter) Less(i, j int) bool {
+	indexI := s.recordIndices[i]
+	bytesI := s.records[indexI.start:indexI.end]
+	indexJ := s.recordIndices[j]
+	bytesJ := s.records[indexJ.start:indexJ.end]
+	return bytes.Compare(bytesI, bytesJ) < 0
+}
+
+func (s *recordSorter) Swap(i, j int) {
+	s.recordIndices[j], s.recordIndices[i] = s.recordIndices[i], s.recordIndices[j]
 }

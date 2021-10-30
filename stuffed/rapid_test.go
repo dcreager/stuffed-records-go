@@ -108,3 +108,10 @@ func TestRecordBuilderWithRandomLists(t *testing.T) {
 		checkRecordBuilder(t, inputList)
 	})
 }
+
+func TestSortedRecordBuilderWithRandomLists(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		inputList := rapid.SliceOf(inputString).Draw(t, "inputList").([]string)
+		checkSortedRecordBuilder(t, inputList)
+	})
+}
