@@ -152,6 +152,21 @@ func FindLastDelimiter(record []byte) int {
 	return bytes.LastIndex(record, []byte{delimiter0, delimiter1})
 }
 
+// IsStartOfRecord returns whether a particular offset within a buffer is the
+// start of a stuffed record.  The offset must either point at the start of the
+// buffer, or immediately after a `0xfe 0xfd` delimiter.  This does not check
+// that the offset points at a valid record, just that it _could_.  (Decode will
+// return an error if it doesn't.)
+func IsStartOfRecord(buffer []byte, offset int) bool {
+	if offset == 1 || offset >= len(buffer) {
+		return false
+	}
+	if offset >= 2 && (buffer[offset-2] != 0xfe || buffer[offset-1] != 0xfd) {
+		return false
+	}
+	return true
+}
+
 // Scanner iterates through a buffer containing zero or more delimited stuffed
 // records.
 type Scanner struct {
