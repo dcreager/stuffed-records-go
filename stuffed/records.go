@@ -18,7 +18,7 @@ type RecordBuilder struct {
 }
 
 type index struct {
-	start, end int
+	originalIndex, start, end int
 }
 
 // FinishRecord indicates that you have finished constructing an individual
@@ -26,7 +26,8 @@ type index struct {
 // encode _all_ of the records that you add to the builder.
 func (rb *RecordBuilder) FinishRecord() {
 	end := rb.Len()
-	rb.recordIndices = append(rb.recordIndices, index{rb.start, end})
+	originalIndex := len(rb.recordIndices)
+	rb.recordIndices = append(rb.recordIndices, index{originalIndex, rb.start, end})
 	rb.start = end
 }
 
@@ -39,6 +40,24 @@ func (rb *RecordBuilder) Encode(dest *bytes.Buffer) {
 		Encode(record, dest)
 		EncodeDelimiter(dest)
 	}
+}
+
+// EncodeWithOffsets encodes all of the records in this builder, just like
+// Encode, but also returns a slice containing the offset of each record in the
+// encoded result.  The offsets will be into the destination buffer that you
+// provide, including any content that was already in the buffer.  The record
+// indexes are based on the original order that you called FinishRecord, even if
+// you've sorted the records.
+func (rb *RecordBuilder) EncodeWithOffsets(dest *bytes.Buffer) []int {
+	records := rb.Bytes()
+	recordOffsets := make([]int, len(rb.recordIndices))
+	for _, index := range rb.recordIndices {
+		recordOffsets[index.originalIndex] = dest.Len()
+		record := records[index.start:index.end]
+		Encode(record, dest)
+		EncodeDelimiter(dest)
+	}
+	return recordOffsets
 }
 
 // Sort sorts all of the records before encoding them, which allows you to use

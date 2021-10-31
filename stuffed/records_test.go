@@ -32,21 +32,41 @@ func checkRecordBuilder(t require.TestingT, inputList []string) {
 	assert.Equal(t, inputList, actual)
 }
 
+func checkRecordBuilderOffsets(t require.TestingT, inputList []string, expectedOffsets []int) {
+	var builder stuffed.RecordBuilder
+	var encoded bytes.Buffer
+	for _, str := range inputList {
+		builder.WriteString(str)
+		builder.FinishRecord()
+	}
+	offsets := builder.EncodeWithOffsets(&encoded)
+	assert.Equal(t, expectedOffsets, offsets)
+}
+
 func TestRecordBuilder(t *testing.T) {
 	testCases := [][]string{
 		{},
 		{"hello", "there"},
 		{"what is\xfe\xfdgoing on"},
 	}
+	offsets := [][]int{
+		{},
+		{0, 8},
+		{0},
+	}
 	for i := range testCases {
 		checkRecordBuilder(t, testCases[i])
+		checkRecordBuilderOffsets(t, testCases[i], offsets[i])
 	}
 }
 
 func checkSortedRecordBuilder(t require.TestingT, inputList []string) {
+	copied := make([]string, len(inputList))
+	copy(copied, inputList)
+
 	var builder stuffed.RecordBuilder
 	var encoded bytes.Buffer
-	for _, str := range inputList {
+	for _, str := range copied {
 		builder.WriteString(str)
 		builder.FinishRecord()
 	}
@@ -63,8 +83,20 @@ func checkSortedRecordBuilder(t require.TestingT, inputList []string) {
 		require.NoError(t, err)
 		actual = append(actual, decoded.String())
 	}
-	sort.Strings(inputList)
-	assert.Equal(t, inputList, actual)
+	sort.Strings(copied)
+	assert.Equal(t, copied, actual)
+}
+
+func checkSortedRecordBuilderOffsets(t require.TestingT, inputList []string, expectedOffsets []int) {
+	var builder stuffed.RecordBuilder
+	var encoded bytes.Buffer
+	for _, str := range inputList {
+		builder.WriteString(str)
+		builder.FinishRecord()
+	}
+	builder.Sort()
+	offsets := builder.EncodeWithOffsets(&encoded)
+	assert.Equal(t, expectedOffsets, offsets)
 }
 
 func TestSortedRecordBuilder(t *testing.T) {
@@ -73,7 +105,13 @@ func TestSortedRecordBuilder(t *testing.T) {
 		{"2 hello", "1 there", "0 world"},
 		{"what is\xfe\xfdgoing on"},
 	}
+	offsets := [][]int{
+		{},
+		{20, 10, 0},
+		{0},
+	}
 	for i := range testCases {
 		checkSortedRecordBuilder(t, testCases[i])
+		checkSortedRecordBuilderOffsets(t, testCases[i], offsets[i])
 	}
 }
