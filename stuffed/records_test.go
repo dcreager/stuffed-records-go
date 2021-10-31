@@ -41,6 +41,16 @@ func checkRecordBuilderOffsets(t require.TestingT, inputList []string, expectedO
 	}
 	offsets := builder.EncodeWithOffsets(&encoded)
 	assert.Equal(t, expectedOffsets, offsets)
+	for i := 0; i < encoded.Len(); i++ {
+		isValidOffset := false
+		for _, offset := range offsets {
+			if offset == i {
+				isValidOffset = true
+			}
+		}
+		actual := stuffed.IsStartOfRecord(encoded.Bytes(), i)
+		assert.Equal(t, isValidOffset, actual)
+	}
 }
 
 func TestRecordBuilder(t *testing.T) {
@@ -97,6 +107,16 @@ func checkSortedRecordBuilderOffsets(t require.TestingT, inputList []string, exp
 	builder.Sort()
 	offsets := builder.EncodeWithOffsets(&encoded)
 	assert.Equal(t, expectedOffsets, offsets)
+	for i := 0; i < encoded.Len(); i++ {
+		isValidOffset := false
+		for _, offset := range offsets {
+			if offset == i {
+				isValidOffset = true
+			}
+		}
+		actual := stuffed.IsStartOfRecord(encoded.Bytes(), i)
+		assert.Equal(t, isValidOffset, actual)
+	}
 }
 
 func TestSortedRecordBuilder(t *testing.T) {
