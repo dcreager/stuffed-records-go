@@ -146,7 +146,7 @@ func FindDelimiter(record []byte) int {
 	return bytes.Index(record, []byte{delimiter0, delimiter1})
 }
 
-// FindLastDelimiter returns the index of the lsat occurrence of the stuffed
+// FindLastDelimiter returns the index of the last occurrence of the stuffed
 // records delimiter in buf, or -1 if it doesn't occur.
 func FindLastDelimiter(record []byte) int {
 	return bytes.LastIndex(record, []byte{delimiter0, delimiter1})
